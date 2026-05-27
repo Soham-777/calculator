@@ -1,0 +1,131 @@
+
+<h2 class="sr-only">Modern calculator with backspace delete button</h2>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+.calc-wrap { display: flex; justify-content: center; align-items: center; padding: 2.5rem 1rem; }
+.calc { width: 300px; background: #111; border-radius: 28px; padding: 24px 20px 20px; box-shadow: 0 0 0 1px rgba(255,255,255,0.07); }
+.screen { padding: 8px 4px 18px; text-align: right; min-height: 100px; display: flex; flex-direction: column; justify-content: flex-end; }
+.expr-line { font-size: 14px; color: #666; min-height: 20px; margin-bottom: 6px; letter-spacing: 0.5px; font-family: var(--font-mono); word-break: break-all; }
+.main-display { font-size: 48px; font-weight: 300; color: #fff; letter-spacing: -2px; line-height: 1; word-break: break-all; transition: font-size 0.1s; }
+.btn-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.btn { height: 60px; border: none; border-radius: 16px; font-size: 18px; font-weight: 400; cursor: pointer; transition: transform 0.08s, filter 0.08s; font-family: var(--font-sans); outline: none; }
+.btn:active { transform: scale(0.93); filter: brightness(0.85); }
+.btn-num  { background: #1e1e1e; color: #fff; }
+.btn-spec { background: #2a2a2a; color: #aaa; font-size: 16px; }
+.btn-op   { background: #1e1e1e; color: #ff9f0a; font-size: 22px; font-weight: 300; }
+.btn-eq   { background: #ff9f0a; color: #fff; font-size: 22px; }
+.btn-del  { background: #2a2a2a; color: #ff6b6b; font-size: 20px; }
+.btn-zero { grid-column: span 2; text-align: left; padding-left: 22px; }
+</style>
+<div class="calc-wrap">
+  <div class="calc">
+    <div class="screen">
+      <div class="expr-line" id="expr"></div>
+      <div class="main-display" id="disp">0</div>
+    </div>
+    <div class="btn-grid" id="pad"></div>
+  </div>
+</div>
+<script>
+(function(){
+  const layout = [
+    {l:'C',   t:'spec'}, {l:'±',  t:'spec'}, {l:'%', t:'spec'}, {l:'÷', t:'op'},
+    {l:'7',   t:'num'},  {l:'8',  t:'num'},  {l:'9', t:'num'},  {l:'×', t:'op'},
+    {l:'4',   t:'num'},  {l:'5',  t:'num'},  {l:'6', t:'num'},  {l:'−', t:'op'},
+    {l:'1',   t:'num'},  {l:'2',  t:'num'},  {l:'3', t:'num'},  {l:'+', t:'op'},
+    {l:'0',   t:'num', span:true},           {l:'.', t:'num'},  {l:'=', t:'eq'},
+    {l:'⌫',  t:'del', fullspan:true},
+  ];
+
+  const pad = document.getElementById('pad');
+  const disp = document.getElementById('disp');
+  const exprEl = document.getElementById('expr');
+
+  let current = '0', prev = '', op = '', waitingForOperand = false;
+
+  function fmt(val) {
+    let s = String(val);
+    if (s.length > 12) s = parseFloat(parseFloat(s).toPrecision(10)).toString();
+    return s;
+  }
+
+  function setDisp(val) {
+    current = String(val);
+    disp.textContent = fmt(val);
+    disp.style.fontSize = current.length > 9 ? '32px' : current.length > 6 ? '40px' : '48px';
+  }
+
+  layout.forEach(({l, t, span, fullspan}) => {
+    const b = document.createElement('button');
+    b.textContent = l;
+    b.className = `btn btn-${t === 'spec' ? 'spec' : t === 'op' ? 'op' : t === 'eq' ? 'eq' : t === 'del' ? 'del' : 'num'}`;
+    if (span) b.classList.add('btn-zero');
+    if (fullspan) b.style.gridColumn = 'span 4';
+    b.addEventListener('click', () => press(l));
+    pad.appendChild(b);
+  });
+
+  function press(k) {
+    if (k === 'C') {
+      current = '0'; prev = ''; op = ''; waitingForOperand = false;
+      disp.textContent = '0'; exprEl.textContent = '';
+      disp.style.fontSize = '48px';
+      return;
+    }
+    if (k === '⌫') {
+      if (waitingForOperand) return;
+      if (current.length > 1) {
+        setDisp(current.slice(0, -1));
+      } else {
+        setDisp('0');
+      }
+      return;
+    }
+    if (k === '±') { setDisp(parseFloat(current) !== 0 ? fmt(-parseFloat(current)) : '0'); return; }
+    if (k === '%') { setDisp(fmt(parseFloat(current) / 100)); return; }
+    if (['÷','×','−','+'].includes(k)) {
+      if (op && !waitingForOperand) {
+        const a = parseFloat(prev), b = parseFloat(current);
+        let r;
+        if (op==='+') r=a+b; else if (op==='−') r=a-b;
+        else if (op==='×') r=a*b; else r=b===0?'Error':a/b;
+        const res = r === 'Error' ? 'Error' : fmt(parseFloat(r.toFixed(10)));
+        setDisp(res); prev = res;
+      } else { prev = current; }
+      op = k; waitingForOperand = true;
+      exprEl.textContent = fmt(parseFloat(prev)) + ' ' + k;
+      return;
+    }
+    if (k === '=') {
+      if (!op || prev === '') return;
+      const a = parseFloat(prev), b = parseFloat(current);
+      let r;
+      if (op==='+') r=a+b; else if (op==='−') r=a-b;
+      else if (op==='×') r=a*b; else r=b===0?'Error':a/b;
+      exprEl.textContent = fmt(parseFloat(prev)) + ' ' + op + ' ' + fmt(parseFloat(current)) + ' =';
+      setDisp(r === 'Error' ? 'Error' : fmt(parseFloat(r.toFixed(10))));
+      op = ''; prev = ''; waitingForOperand = false;
+      return;
+    }
+    if (k === '.') {
+      if (waitingForOperand) { setDisp('0.'); waitingForOperand = false; return; }
+      if (!current.includes('.')) setDisp(current + '.');
+      return;
+    }
+    if (waitingForOperand) { setDisp(k); waitingForOperand = false; }
+    else {
+      const next = current === '0' ? k : current + k;
+      if (next.replace('.','').replace('-','').length <= 12) setDisp(next);
+    }
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Backspace') { e.preventDefault(); press('⌫'); return; }
+    const map = {'Enter':'=','Escape':'C','+':'+','-':'−','*':'×','/':'÷'};
+    const k = map[e.key] || e.key;
+    if ('0123456789.'.includes(k) || ['÷','×','−','+','=','C'].includes(k)) {
+      e.preventDefault(); press(k);
+    }
+  });
+})();
+</script>
